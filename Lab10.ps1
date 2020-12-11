@@ -130,3 +130,49 @@ Invoke-Command -Session $CL1Session {Set-NetIPInterface -InterfaceAlias "Etherne
 # 10-11. Note IPv4 DHCP server
 # ----------------------------
 Invoke-Command -Session $CL1Session {Get-NetIPAddress -InterfaceAlias "Ethernet" -AddressFamily IPv4}
+
+
+# 12-18 Install DHCP Server (on LON-SVR1)
+# ---------------------------------------
+Invoke-Command -Session $SVR1Session {Install-WindowsFeature -Name DHCP,RSAT-DHCP}
+Invoke-Command -Session $SVR1Session {Add-DhcpServerSecurityGroup}
+Invoke-Command -Session $SVR1Session {Restart-Service -Name DHCPServer}
+Invoke-Command -Session $SVR1Session {Set-ItemProperty -Path HKLM:\SOFTWARE\Microsoft\ServerManager\Roles\12 -Name ConfigurationState -Value 2}
+
+
+# 19-20. Authorize LON-SVR1
+# -------------------------
+Invoke-Command -Session $SVR1Session {Add-DhcpServerInDC}
+
+
+# 21-30. New DHCP scope (on LON-SVR1)
+# -----------------------------------
+
+Invoke-Command -Session $SVR1Session {Add-DhcpServerv4Scope -Name "Lab 10 Scope" `
+                                                            -StartRange   "172.16.0.200" `
+                                                            -EndRange     "172.16.0.210" `
+                                                            -SubnetMask   "255.255.0.0" }
+Invoke-Command -Session $SVR1Session {Get-DhcpServerv4Scope -ScopeId "172.16.0.0" | Set-DhcpServerv4OptionValue -Router "172.16.0.1"}
+
+
+# 31-32.Confirm activate scope selection
+# --------------------------------------
+Invoke-Command -Session $SVR1Session {Get-DhcpServerv4Scope -ScopeId "172.16.0.0" | % State}
+
+
+
+# 33-34. Prevent LON-DC1 from issuing DHCP lease
+# ----------------------------------------------
+Set-VMNetworkAdapter -VMName $DC1 -DhcpGuard On
+Set-VMNetworkAdapter -VMName $SVR1 -DhcpGuard Off
+
+
+# 35-36. Renew IP configuration (on LON-CL1)
+# ------------------------------------------
+Invoke-Command -Session $CL1Session {ipconfig /release}
+Invoke-Command -Session $CL1Session {ipconfig /renew}
+
+
+# 37-39. Confirm DHCP server (on LON-CL1)
+# ---------------------------------------
+Invoke-Command -Session $CL1Session {Get-NetIPAddress -InterfaceAlias "Ethernet" -AddressFamily IPv4}
