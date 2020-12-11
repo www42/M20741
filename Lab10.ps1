@@ -176,3 +176,64 @@ Invoke-Command -Session $CL1Session {ipconfig /renew}
 # 37-39. Confirm DHCP server (on LON-CL1)
 # ---------------------------------------
 Invoke-Command -Session $CL1Session {Get-NetIPAddress -InterfaceAlias "Ethernet" -AddressFamily IPv4}
+
+
+
+
+
+
+# ------------------
+# Exercise 3 VLANs
+# ------------------
+
+# 1-3. Delete LON-SVR1 NIC Team
+Invoke-Command -Session $SVR1Session {Remove-NetLbfoTeam  -Name "LON-SVR1 NIC Team" -Confirm:$false}
+
+
+# 4-5. Enable VLAN ID for "External Switch" (for LON-HOST1)
+# ---------------------------------------------------------
+#
+#   IP Address LON-HOST1:
+    Get-NetIPAddress -AddressFamily IPv4 | ? InterfaceAlias -like *External* | % IPAddress
+#     --> 172.16.10.100
+#
+#   IP Address LON-SVR1:
+    Get-VMNetworkAdapter -VMName $SVR1 | ? SwitchName -eq "External Switch" | % IPaddresses
+#     --> 172.16.10.102
+#
+#   ping?
+    Test-NetConnection -ComputerName 172.16.10.102
+#     --> yes we can!
+#
+#   ----------------------------
+Set-VMNetworkAdapterVlan -ManagementOS -VMNetworkAdapterName "External Switch" -Access -VlanId 2
+Get-VMNetworkAdapterVlan -ManagementOS -VMNetworkAdapterName "External Switch"
+
+
+
+# 6-7. Enable VLAN ID for "New Network Adapter" (for LON-SVR1)
+# ------------------------------------------------------------
+
+Set-VMNetworkAdapterVlan -VMName $SVR1 -VMNetworkAdapterName "New Network Adapter" -Access -VlanId 2
+Get-VMNetworkAdapterVlan -VMName $SVR1 -VMNetworkAdapterName "New Network Adapter" 
+
+
+# 8-9. Enable bandwidth management (for LON-SVR1)
+# -----------------------------------------------
+Set-VMNetworkAdapter -VMName $SVR1 -VMNetworkAdapterName "New Network Adapter" -MinimumBandwidthAbsolute 100MB
+
+
+# 10-16. Observe Ethernet usage (on LON-SVR1)
+# -------------------------------------------
+# --> GUI
+
+
+# 17-18. Change "New Network Adapter"'s Virtual Switch
+# ----------------------------------------------------
+Disconnect-VMNetworkAdapter -VMName $SVR1 -VMNetworkAdapterName "New Network Adapter"
+
+
+# 19-21. Remove "External Switch"
+# -------------------------------
+Remove-VMSwitch -Name "External Switch" -Force
+Get-VMSwitch
